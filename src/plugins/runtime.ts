@@ -1,5 +1,43 @@
+import type { OpenClawConfig } from "../config/config.js";
 import { createEmptyPluginRegistry } from "./registry-empty.js";
 import type { PluginRegistry } from "./registry.js";
+
+export type CapabilityFilter<T extends string> = (cap: string) => cap is T;
+
+export type PluginProviderEntry = {
+  id: string;
+  routingCapabilities?: string[];
+  [key: string]: unknown;
+};
+
+export type ProviderMapper<T> = (provider: PluginProviderEntry) => T | undefined;
+
+export function getPluginProvidersByCapability<T extends { id: string }>(
+  capabilityFilter: CapabilityFilter<string>,
+  mapper: ProviderMapper<T>,
+): Record<string, T> {
+  const registry = getActivePluginRegistry();
+  if (!registry) {
+    return {};
+  }
+
+  const providers: Record<string, T> = {};
+  for (const entry of registry.providers) {
+    const p = entry.provider;
+    // Guard against object-shaped capabilities (e.g., { providerFamily: "openai" })
+    const caps = p.routingCapabilities;
+    const capabilitiesArray = Array.isArray(caps) ? caps : [];
+    const hasCapability = capabilitiesArray.some(capabilityFilter);
+    if (!hasCapability) {
+      continue;
+    }
+    const mapped = mapper(p);
+    if (mapped) {
+      providers[mapped.id] = mapped;
+    }
+  }
+  return providers;
+}
 
 const REGISTRY_STATE = Symbol.for("openclaw.pluginRegistryState");
 
@@ -34,10 +72,7 @@ export function setActivePluginRegistry(registry: PluginRegistry, cacheKey?: str
   }
   state.key = cacheKey ?? null;
   state.version += 1;
-}
-
-export function getActivePluginRegistry(): PluginRegistry | null {
-  return state.registry;
+  invalidateAllProviderCaches();
 }
 
 export function requireActivePluginRegistry(): PluginRegistry {
@@ -47,7 +82,12 @@ export function requireActivePluginRegistry(): PluginRegistry {
       state.httpRouteRegistry = state.registry;
     }
     state.version += 1;
+    invalidateAllProviderCaches();
   }
+  return state.registry;
+}
+
+export function getActivePluginRegistry(): PluginRegistry | null {
   return state.registry;
 }
 
@@ -99,6 +139,59 @@ export function getActivePluginRegistryVersion(): number {
   return state.version;
 }
 
+const ttsProviderCache = new Map<string, TtsProviderCacheEntry>();
+const mediaProviderCache = new Map<string, MediaProviderCacheEntry>();
+
+type TtsProviderCacheEntry = {
+  version: number;
+  registry: Map<string, unknown>;
+};
+
+type MediaProviderCacheEntry = {
+  version: number;
+  registry: Map<string, unknown>;
+};
+
+export function invalidateTtsProviderCache(): void {
+  ttsProviderCache.clear();
+}
+
+export function invalidateMediaProviderCache(): void {
+  mediaProviderCache.clear();
+}
+
+export function invalidateAllProviderCaches(): void {
+  ttsProviderCache.clear();
+  mediaProviderCache.clear();
+}
+
+export function getTtsProviderCacheEntry(
+  _config: OpenClawConfig,
+): Map<string, unknown> | undefined {
+  const version = getActivePluginRegistryVersion();
+  const cached = ttsProviderCache.get(String(version));
+  return cached?.registry;
+}
+
+export function setTtsProviderCacheEntry(
+  _config: OpenClawConfig,
+  registry: Map<string, unknown>,
+): void {
+  const version = getActivePluginRegistryVersion();
+  ttsProviderCache.set(String(version), { version, registry });
+}
+
+export function getMediaProviderCacheEntry(): Map<string, unknown> | undefined {
+  const version = getActivePluginRegistryVersion();
+  const cached = mediaProviderCache.get(String(version));
+  return cached?.registry;
+}
+
+export function setMediaProviderCacheEntry(registry: Map<string, unknown>): void {
+  const version = getActivePluginRegistryVersion();
+  mediaProviderCache.set(String(version), { version, registry });
+}
+
 export function resetPluginRuntimeStateForTest(): void {
   const emptyRegistry = createEmptyPluginRegistry();
   state.registry = emptyRegistry;
@@ -106,4 +199,5 @@ export function resetPluginRuntimeStateForTest(): void {
   state.httpRouteRegistryPinned = false;
   state.key = null;
   state.version += 1;
+  invalidateAllProviderCaches();
 }

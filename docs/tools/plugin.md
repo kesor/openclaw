@@ -200,7 +200,8 @@ openclaw plugins enable <id>
 openclaw plugins disable <id>
 ```
 
-See [`openclaw plugins` CLI reference](/cli/plugins) for full details.
+See [`openclaw plugins` CLI reference](/cli/plugins) for full details on each
+command (install rules, inspect output, marketplace installs, uninstall).
 
 ## Plugin API overview
 
@@ -249,3 +250,42 @@ Common registration methods:
 - [Registering Tools](/plugins/building-plugins#registering-agent-tools) — add agent tools in a plugin
 - [Plugin Internals](/plugins/architecture) — capability model and load pipeline
 - [Community Plugins](/plugins/community) — third-party listings
+
+## Plugin API (overview)
+
+Plugins export either:
+
+- A function: `(api) => { ... }`
+- An object: `{ id, name, configSchema, register(api) { ... } }`
+
+`register(api)` is where plugins attach behavior. Common registrations include:
+
+- `registerTool`
+- `registerHook`
+- `on(...)` for typed lifecycle hooks
+- `registerChannel`
+- `registerProvider`
+- `registerSpeechProvider`
+- `registerMediaUnderstandingProvider`
+- `registerWebSearchProvider`
+- `registerHttpRoute`
+- `registerCommand`
+- `registerCli`
+- `registerContextEngine`
+- `registerService`
+
+See [Model Provider Plugins](/plugins/model-providers) for how to register providers with capabilities for chat, embeddings, TTS, speech, and media understanding.
+
+See [Plugin manifest](/plugins/manifest) for the manifest file format.
+
+## Further reading
+
+- [Plugin architecture and internals](/plugins/architecture) -- capability model,
+  ownership model, contracts, load pipeline, runtime helpers, and developer API
+  reference
+- [Building extensions](/plugins/building-extensions)
+- [Plugin bundles](/plugins/bundles)
+- [Plugin manifest](/plugins/manifest)
+- [Plugin agent tools](/plugins/agent-tools)
+- [Capability Cookbook](/tools/capability-cookbook)
+- [Community plugins](/plugins/community)

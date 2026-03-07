@@ -1,5 +1,6 @@
 import path from "node:path";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { normalizeProviderId } from "../agents/model-selection.js";
 import { CHANNEL_IDS, normalizeChatChannelId } from "../channels/registry.js";
 import { withBundledPluginAllowlistCompat } from "../plugins/bundled-compat.js";
 import { resolveBundledWebSearchPluginIds } from "../plugins/bundled-web-search.js";
@@ -9,6 +10,7 @@ import {
   resolveMemorySlotDecision,
 } from "../plugins/config-state.js";
 import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { getActivePluginRegistry } from "../plugins/runtime.js";
 import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
 import {
   hasAvatarUriScheme,
@@ -490,9 +492,101 @@ function validateConfigObjectWithPluginsBase(
     config.agents?.defaults?.heartbeat?.target,
     "agents.defaults.heartbeat.target",
   );
+
+  const knownMemoryProviders = new Set([
+    "openai",
+    "local",
+    "gemini",
+    "voyage",
+    "mistral",
+    "ollama",
+    "auto",
+  ]);
+  const knownMemoryFallbacks = new Set([...knownMemoryProviders].filter((p) => p !== "auto"));
+  knownMemoryFallbacks.add("none");
+
+  const validateMemorySearchProvider = (provider: string | undefined, path: string) => {
+    if (typeof provider !== "string") {
+      return;
+    }
+    // Validate against known built-in providers
+    if (knownMemoryProviders.has(provider)) {
+      return;
+    }
+    // Check if this is a loaded plugin embedding provider first
+    const pluginRegistry = getActivePluginRegistry();
+    const isKnownPlugin = pluginRegistry?.providers.some((entry) => {
+      const caps = entry.provider.routingCapabilities;
+      const capabilitiesArray = Array.isArray(caps) ? caps : [];
+      return (
+        normalizeProviderId(entry.provider.id) === normalizeProviderId(provider) &&
+        capabilitiesArray.includes("embedding")
+      );
+    });
+    if (isKnownPlugin) {
+      return; // Known plugin embedding provider - validate at runtime
+    }
+    // Note: We don't check manifest registry here because manifest doesn't have
+    // capability info - embeddings will be validated at runtime
+    // Reject unknown providers at config time
+    issues.push({ path, message: `unknown memorySearch provider: ${provider}` });
+  };
+
+  const validateMemorySearchFallback = (fallback: string | undefined, path: string) => {
+    if (typeof fallback !== "string") {
+      return;
+    }
+    // Validate against known built-in fallbacks
+    if (knownMemoryFallbacks.has(fallback)) {
+      return;
+    }
+    // Check if this is a loaded plugin embedding provider first
+    const pluginRegistry = getActivePluginRegistry();
+    const isKnownPlugin = pluginRegistry?.providers.some((entry) => {
+      const caps = entry.provider.routingCapabilities;
+      const capabilitiesArray = Array.isArray(caps) ? caps : [];
+      return (
+        normalizeProviderId(entry.provider.id) === normalizeProviderId(fallback) &&
+        capabilitiesArray.includes("embedding")
+      );
+    });
+    if (isKnownPlugin) {
+      return; // Known plugin embedding provider - validate at runtime
+    }
+    // Note: We don't check manifest registry here because manifest doesn't have
+    // capability info - embeddings will be validated at runtime
+    // Reject unknown fallbacks at config time
+    issues.push({ path, message: `unknown memorySearch fallback: ${fallback}` });
+  };
+
+  const defaultMemorySearch = config.agents?.defaults?.memorySearch;
+  if (defaultMemorySearch) {
+    // Plugin provider validation happens at runtime - skip at config time
+    validateMemorySearchProvider(
+      defaultMemorySearch.provider,
+      "agents.defaults.memorySearch.provider",
+    );
+    validateMemorySearchFallback(
+      defaultMemorySearch.fallback,
+      "agents.defaults.memorySearch.fallback",
+    );
+  }
+
   if (Array.isArray(config.agents?.list)) {
     for (const [index, entry] of config.agents.list.entries()) {
       validateHeartbeatTarget(entry?.heartbeat?.target, `agents.list.${index}.heartbeat.target`);
+      const memorySearch = entry?.memorySearch;
+      if (memorySearch) {
+        // Plugin provider validation happens at runtime - skip at config time
+        validateMemorySearchProvider(
+          memorySearch.provider,
+          `agents.list.${index}.memorySearch.provider`,
+        );
+        validateMemorySearchFallback(
+          memorySearch.fallback,
+          `agents.list.${index}.memorySearch.fallback`,
+        );
+      }
     }
   }
 
