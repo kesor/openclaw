@@ -31,6 +31,7 @@ import {
   normalizeAttachments,
   selectAttachments,
 } from "./attachments.js";
+import { runWithConcurrency } from "./concurrency.js";
 import {
   AUTO_AUDIO_KEY_PROVIDERS,
   AUTO_IMAGE_KEY_PROVIDERS,
@@ -45,7 +46,7 @@ import {
   getMediaUnderstandingProvider,
   normalizeMediaProviderId,
 } from "./providers/index.js";
-import { resolveModelEntries, resolveScopeDecision } from "./resolve.js";
+import { resolveConcurrency, resolveModelEntries, resolveScopeDecision } from "./resolve.js";
 import {
   buildModelDecision,
   formatDecisionSummary,
@@ -773,21 +774,24 @@ export async function runCapability(params: {
 
   const outputs: MediaUnderstandingOutput[] = [];
   const attachmentDecisions: MediaUnderstandingDecision["attachments"] = [];
-  const results = await Promise.all(
-    selected.map((attachment) =>
-      runAttachmentEntries({
-        capability,
-        cfg,
-        ctx,
-        attachmentIndex: attachment.index,
-        agentDir: params.agentDir,
-        providerRegistry: params.providerRegistry,
-        cache: params.attachments,
-        entries: resolvedEntries,
-        config,
-      }),
-    ),
-  );
+  type AttachmentResult = {
+    output: MediaUnderstandingOutput | null;
+    attempts: MediaUnderstandingModelDecision[];
+  };
+  const tasks: Array<() => Promise<AttachmentResult>> = selected.map((attachment) => async () => {
+    return runAttachmentEntries({
+      capability,
+      cfg,
+      ctx,
+      attachmentIndex: attachment.index,
+      agentDir: params.agentDir,
+      providerRegistry: params.providerRegistry,
+      cache: params.attachments,
+      entries: resolvedEntries,
+      config,
+    });
+  });
+  const results = await runWithConcurrency(tasks, resolveConcurrency(cfg));
   for (let i = 0; i < selected.length; i++) {
     const { output, attempts } = results[i];
     const attachment = selected[i];
