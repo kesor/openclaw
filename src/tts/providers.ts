@@ -1,8 +1,8 @@
-import { normalizeSpeechProviderId } from "./provider-registry.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { TextToSpeechRequest, TextToSpeechResult } from "../media-understanding/types.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { getPluginProvidersByCapability, type PluginProviderEntry } from "../plugins/runtime.js";
+import { normalizeSpeechProviderId } from "./provider-registry.js";
 
 export type TtsProvider = {
   id: string;
@@ -26,7 +26,7 @@ function getPluginTtsProviders(config?: OpenClawConfig): Record<string, TtsProvi
     if (!p.textToSpeech) {
       return undefined;
     }
-    const normalizedId = normalizeSpeechProviderId(p.id);
+    const normalizedId = normalizeTtsProviderId(p.id);
     return {
       id: normalizedId,
       textToSpeech: p.textToSpeech as TtsProvider["textToSpeech"],
@@ -42,12 +42,12 @@ export function buildTtsProviderRegistry(
 
   const pluginProviders = getPluginTtsProviders(config);
   for (const [key, provider] of Object.entries(pluginProviders)) {
-    registry.set(normalizeSpeechProviderId(key), provider);
+    registry.set(normalizeTtsProviderId(key), provider);
   }
 
   if (overrides) {
     for (const [key, provider] of Object.entries(overrides)) {
-      const normalizedKey = normalizeSpeechProviderId(key);
+      const normalizedKey = normalizeTtsProviderId(key);
       const existing = registry.get(normalizedKey);
       const merged = existing ? { ...existing, ...provider } : provider;
       registry.set(normalizedKey, merged);
@@ -65,5 +65,5 @@ export async function buildTtsProviderRegistryAsync(
 }
 
 export function getTtsProvider(id: string, registry: TtsProviderRegistry): TtsProvider | undefined {
-  return registry.get(normalizeSpeechProviderId(id));
+  return registry.get(normalizeTtsProviderId(id));
 }
