@@ -10,6 +10,7 @@ import {
   resolveMemorySlotDecision,
 } from "../plugins/config-state.js";
 import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import type { PluginRecord } from "../plugins/registry.js";
 import { getActivePluginRegistry } from "../plugins/runtime.js";
 import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
 import {
@@ -505,6 +506,8 @@ function validateConfigObjectWithPluginsBase(
   const knownMemoryFallbacks = new Set([...knownMemoryProviders].filter((p) => p !== "auto"));
   knownMemoryFallbacks.add("none");
 
+  const normalizedPluginsConfig = normalizePluginsConfig(config.plugins);
+
   const validateMemorySearchProvider = (provider: string | undefined, path: string) => {
     if (typeof provider !== "string") {
       return;
@@ -527,15 +530,24 @@ function validateConfigObjectWithPluginsBase(
     if (isLoadedPlugin) {
       return; // Known loaded plugin with embedding capability - validate at runtime
     }
-    // Check manifest registry for any plugin that provides this provider ID
+    // Check manifest registry for any enabled plugin that provides this provider ID
     const manifestRegistry = loadPluginManifestRegistry({ config });
-    const isAvailablePlugin = manifestRegistry.plugins.some((plugin) =>
-      plugin.providers.some((p) => normalizeProviderId(p) === normalizedProvider),
-    );
-    if (isAvailablePlugin) {
-      return; // Available plugin - validate capability at runtime
+    const isAvailableEnabledPlugin = manifestRegistry.plugins.some((plugin) => {
+      if (!plugin.providers.some((p) => normalizeProviderId(p) === normalizedProvider)) {
+        return false;
+      }
+      const enableState = resolveEffectiveEnableState({
+        id: plugin.id,
+        origin: plugin.origin,
+        config: normalizedPluginsConfig,
+        enabledByDefault: plugin.enabledByDefault,
+      });
+      return enableState.enabled;
+    });
+    if (isAvailableEnabledPlugin) {
+      return; // Enabled plugin provides this provider - validate capability at runtime
     }
-    // Reject unknown providers at config time
+    // Reject unknown or disabled providers at config time
     issues.push({ path, message: `unknown memorySearch provider: ${provider}` });
   };
 
@@ -561,15 +573,24 @@ function validateConfigObjectWithPluginsBase(
     if (isLoadedPlugin) {
       return; // Known loaded plugin with embedding capability - validate at runtime
     }
-    // Check manifest registry for any plugin that provides this provider ID
+    // Check manifest registry for any enabled plugin that provides this provider ID
     const manifestRegistry = loadPluginManifestRegistry({ config });
-    const isAvailablePlugin = manifestRegistry.plugins.some((plugin) =>
-      plugin.providers.some((p) => normalizeProviderId(p) === normalizedFallback),
-    );
-    if (isAvailablePlugin) {
-      return; // Available plugin - validate capability at runtime
+    const isAvailableEnabledPlugin = manifestRegistry.plugins.some((plugin) => {
+      if (!plugin.providers.some((p) => normalizeProviderId(p) === normalizedFallback)) {
+        return false;
+      }
+      const enableState = resolveEffectiveEnableState({
+        id: plugin.id,
+        origin: plugin.origin,
+        config: normalizedPluginsConfig,
+        enabledByDefault: plugin.enabledByDefault,
+      });
+      return enableState.enabled;
+    });
+    if (isAvailableEnabledPlugin) {
+      return; // Enabled plugin provides this fallback - validate capability at runtime
     }
-    // Reject unknown fallbacks at config time
+    // Reject unknown or disabled fallbacks at config time
     issues.push({ path, message: `unknown memorySearch fallback: ${fallback}` });
   };
 
