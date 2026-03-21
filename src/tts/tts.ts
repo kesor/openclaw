@@ -1303,4 +1303,5 @@ export const _test = {
   summarizeText,
   resolveOutputFormat,
   resolveEdgeOutputFormat,
+  resolveTtsApiKey,
 };
