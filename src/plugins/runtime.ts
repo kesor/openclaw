@@ -136,8 +136,6 @@ export function getActivePluginRegistryVersion(): number {
   return state.version;
 }
 
-export function invalidateAllProviderCaches(): void {}
-
 export function resetPluginRuntimeStateForTest(): void {
   const emptyRegistry = createEmptyPluginRegistry();
   state.registry = emptyRegistry;
@@ -145,5 +143,4 @@ export function resetPluginRuntimeStateForTest(): void {
   state.httpRouteRegistryPinned = false;
   state.key = null;
   state.version += 1;
-  invalidateAllProviderCaches();
 }
