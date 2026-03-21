@@ -232,7 +232,9 @@ function getPluginEmbeddingProvidersSync(
       const normalizedId = normalizeProviderId(p.id);
 
       // Resolve provider config baseUrl/headers, merging with remote settings
-      const providerConfig = options.config.models?.providers?.[normalizedId];
+      // Try original ID first, then normalized ID (handles alias normalization)
+      const providers = options.config.models?.providers ?? {};
+      const providerConfig = providers[p.id] ?? providers[normalizedId];
       const providerHeaders = providerConfig?.headers;
       const sanitizedHeaders: Record<string, string> = {};
       if (providerHeaders) {

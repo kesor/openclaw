@@ -240,6 +240,10 @@ export function normalizeRegisteredProvider(params: {
   provider: ProviderPlugin;
   pushDiagnostic: (diag: PluginDiagnostic) => void;
 }): ProviderPlugin | null {
+  // NOTE: normalizeProviderId includes alias mapping, so plugin IDs are normalized to
+  // their canonical form (e.g., "qwen" becomes "qwen-portal"). This is intentional—
+  // plugin IDs should be normalized for consistent lookups, and plugins should not
+  // depend on their original ID being preserved.
   const id = normalizeProviderId(params.provider.id);
   if (!id) {
     pushProviderDiagnostic({

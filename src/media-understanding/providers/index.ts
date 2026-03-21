@@ -118,7 +118,7 @@ export function buildMediaUnderstandingRegistry(
     mergeProviderIntoRegistry(registry, entry.provider);
   }
 
-  const pluginProviders = getPluginMediaProviders();
+  const pluginProviders = getPluginMediaProviders(cfg);
   for (const [key, provider] of Object.entries(pluginProviders)) {
     const normalizedKey = normalizeMediaProviderId(key);
     const existing = registry.get(normalizedKey);
