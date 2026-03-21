@@ -10,7 +10,7 @@ Use `api.registerProvider()` to register a provider with capabilities:
 api.registerProvider({
   id: "my-provider",
   label: "My Provider",
-  capabilities: ["chat", "embedding", "tts", "audio", "image", "video"],
+  capabilities: ["embedding", "tts", "audio", "image", "video"],
 
   // Implement methods for each capability you support
   // (not all are required)
@@ -23,36 +23,23 @@ The `capabilities` array declares what your provider supports:
 
 | Capability  | Description         | Methods to implement                      |
 | ----------- | ------------------- | ----------------------------------------- |
-| `chat`      | Text inference/chat | `chat`                                    |
 | `embedding` | Text embeddings     | `embed`, `embedBatch`, `embedBatchInputs` |
 | `tts`       | Text-to-speech      | `textToSpeech`                            |
 | `audio`     | Speech-to-text      | `transcribeAudio`                         |
 | `image`     | Image understanding | `describeImage`                           |
 | `video`     | Video understanding | `describeVideo`                           |
 
+## Text Inference (Chat)
+
+Text inference does not use a plugin method. Instead, plugins provide text inference through the **catalog/discovery system**:
+
+1. **Catalog hook**: Implement `catalog` to return `ModelCatalogEntry` rows that describe your provider's chat models
+2. **Auth hooks**: Implement `auth` methods to handle API key/OAuth authentication
+3. **Runtime hooks**: Optionally implement `prepareRuntimeAuth`, `normalizeResolvedModel`, etc. to customize the inference flow
+
+The catalog entry shape determines how OpenClaw routes inference requests to your provider's API.
+
 ## Capability Methods
-
-### Chat (Text Inference)
-
-```ts
-chat: async (req) => {
-  // req.messages: ChatMessage[]
-  // req.model?: string
-  // req.apiKey: string
-  // req.baseUrl?: string
-  // req.headers?: Record<string, string>
-  // req.temperature?: number
-  // req.maxTokens?: number
-  // req.stop?: string[]
-  // req.fetchFn?: typeof fetch
-
-  return {
-    message: { role: "assistant", content: "response" },
-    usage: { inputTokens: 10, outputTokens: 20 },
-    finishReason: "stop",
-  };
-},
-```
 
 ### Embeddings
 
@@ -109,7 +96,9 @@ embedBatchInputs: async (req) => {
 textToSpeech: async (req) => {
   // req.text: string
   // req.model?: string
+  // req.modelId?: string
   // req.voice?: string
+  // req.voiceId?: string
   // req.apiKey: string
   // req.baseUrl?: string
   // req.headers?: Record<string, string>
@@ -152,12 +141,18 @@ transcribeAudio: async (req) => {
 describeImage: async (req) => {
   // req.buffer: Buffer
   // req.fileName?: string
-  // req.mime: string
+  // req.mime?: string
+  // req.model: string (required)
+  // req.provider: string
   // req.prompt?: string
+  // req.maxTokens?: number
+  // req.timeoutMs: number
+  // req.profile?: string
+  // req.preferredProfile?: string
+  // req.agentDir: string (required)
   // req.apiKey: string
   // req.baseUrl?: string
   // req.headers?: Record<string, string>
-  // req.timeoutMs: number
   // req.fetchFn?: typeof fetch
 
   return { text: "image description", model: req.model };
@@ -170,7 +165,8 @@ describeImage: async (req) => {
 describeVideo: async (req) => {
   // req.buffer: Buffer
   // req.fileName?: string
-  // req.mime: string
+  // req.mime?: string
+  // req.model?: string
   // req.prompt?: string
   // req.apiKey: string
   // req.baseUrl?: string

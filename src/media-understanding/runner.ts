@@ -773,18 +773,24 @@ export async function runCapability(params: {
 
   const outputs: MediaUnderstandingOutput[] = [];
   const attachmentDecisions: MediaUnderstandingDecision["attachments"] = [];
-  for (const attachment of selected) {
-    const { output, attempts } = await runAttachmentEntries({
-      capability,
-      cfg,
-      ctx,
-      attachmentIndex: attachment.index,
-      agentDir: params.agentDir,
-      providerRegistry: params.providerRegistry,
-      cache: params.attachments,
-      entries: resolvedEntries,
-      config,
-    });
+  const results = await Promise.all(
+    selected.map((attachment) =>
+      runAttachmentEntries({
+        capability,
+        cfg,
+        ctx,
+        attachmentIndex: attachment.index,
+        agentDir: params.agentDir,
+        providerRegistry: params.providerRegistry,
+        cache: params.attachments,
+        entries: resolvedEntries,
+        config,
+      }),
+    ),
+  );
+  for (let i = 0; i < selected.length; i++) {
+    const { output, attempts } = results[i];
+    const attachment = selected[i];
     if (output) {
       outputs.push(output);
     }
