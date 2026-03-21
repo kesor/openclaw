@@ -1,4 +1,3 @@
-import type { OpenClawConfig } from "../config/config.js";
 import { createEmptyPluginRegistry } from "./registry-empty.js";
 import type { PluginRegistry } from "./registry.js";
 
@@ -139,58 +138,7 @@ export function getActivePluginRegistryVersion(): number {
   return state.version;
 }
 
-const ttsProviderCache = new Map<string, TtsProviderCacheEntry>();
-const mediaProviderCache = new Map<string, MediaProviderCacheEntry>();
-
-type TtsProviderCacheEntry = {
-  version: number;
-  registry: Map<string, unknown>;
-};
-
-type MediaProviderCacheEntry = {
-  version: number;
-  registry: Map<string, unknown>;
-};
-
-export function invalidateTtsProviderCache(): void {
-  ttsProviderCache.clear();
-}
-
-export function invalidateMediaProviderCache(): void {
-  mediaProviderCache.clear();
-}
-
-export function invalidateAllProviderCaches(): void {
-  ttsProviderCache.clear();
-  mediaProviderCache.clear();
-}
-
-export function getTtsProviderCacheEntry(
-  _config: OpenClawConfig,
-): Map<string, unknown> | undefined {
-  const version = getActivePluginRegistryVersion();
-  const cached = ttsProviderCache.get(String(version));
-  return cached?.registry;
-}
-
-export function setTtsProviderCacheEntry(
-  _config: OpenClawConfig,
-  registry: Map<string, unknown>,
-): void {
-  const version = getActivePluginRegistryVersion();
-  ttsProviderCache.set(String(version), { version, registry });
-}
-
-export function getMediaProviderCacheEntry(): Map<string, unknown> | undefined {
-  const version = getActivePluginRegistryVersion();
-  const cached = mediaProviderCache.get(String(version));
-  return cached?.registry;
-}
-
-export function setMediaProviderCacheEntry(registry: Map<string, unknown>): void {
-  const version = getActivePluginRegistryVersion();
-  mediaProviderCache.set(String(version), { version, registry });
-}
+export function invalidateAllProviderCaches(): void {}
 
 export function resetPluginRuntimeStateForTest(): void {
   const emptyRegistry = createEmptyPluginRegistry();
