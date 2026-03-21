@@ -1,7 +1,43 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createEmptyPluginRegistry } from "../../plugins/registry.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
-import { buildMediaUnderstandingRegistry, getMediaUnderstandingProvider } from "./index.js";
+import {
+  buildMediaUnderstandingRegistry,
+  getMediaUnderstandingProvider,
+  normalizeMediaProviderId,
+} from "./index.js";
+
+describe("normalizeMediaProviderId", () => {
+  it("normalizes provider IDs to lowercase", () => {
+    expect(normalizeMediaProviderId("OpenAI")).toBe("openai");
+    expect(normalizeMediaProviderId("ANTHROPIC")).toBe("anthropic");
+    expect(normalizeMediaProviderId(" Google ")).toBe("google");
+  });
+
+  it("normalizes gemini to google", () => {
+    expect(normalizeMediaProviderId("gemini")).toBe("google");
+    expect(normalizeMediaProviderId("GEMINI")).toBe("google");
+    expect(normalizeMediaProviderId("Gemini")).toBe("google");
+    expect(normalizeMediaProviderId(" gemini ")).toBe("google");
+  });
+
+  it("normalizes z.ai alias to zai", () => {
+    expect(normalizeMediaProviderId("z.ai")).toBe("zai");
+    expect(normalizeMediaProviderId("Z.AI")).toBe("zai");
+    expect(normalizeMediaProviderId("z-ai")).toBe("zai");
+  });
+
+  it("normalizes qwen to qwen-portal", () => {
+    expect(normalizeMediaProviderId("qwen")).toBe("qwen-portal");
+    expect(normalizeMediaProviderId("QWEN")).toBe("qwen-portal");
+  });
+
+  it("normalizes bedrock variants to amazon-bedrock", () => {
+    expect(normalizeMediaProviderId("bedrock")).toBe("amazon-bedrock");
+    expect(normalizeMediaProviderId("aws-bedrock")).toBe("amazon-bedrock");
+    expect(normalizeMediaProviderId("AWS-BEDROCK")).toBe("amazon-bedrock");
+  });
+});
 
 describe("media-understanding provider registry", () => {
   afterEach(() => {
@@ -59,5 +95,135 @@ describe("media-understanding provider registry", () => {
     const provider = getMediaUnderstandingProvider("gemini", registry);
 
     expect(provider?.id).toBe("google");
+  });
+
+  it("allows lookups regardless of original casing", () => {
+    const pluginRegistry = createEmptyPluginRegistry();
+    pluginRegistry.mediaUnderstandingProviders.push({
+      pluginId: "test-plugin",
+      pluginName: "Test Plugin",
+      source: "test",
+      provider: {
+        id: "testprovider",
+        capabilities: ["audio"],
+        transcribeAudio: async () => ({ text: "transcribed" }),
+      },
+    });
+    setActivePluginRegistry(pluginRegistry);
+
+    const registry = buildMediaUnderstandingRegistry();
+
+    expect(getMediaUnderstandingProvider("testprovider", registry)).toBeDefined();
+    expect(getMediaUnderstandingProvider("TESTPROVIDER", registry)).toBeDefined();
+    expect(getMediaUnderstandingProvider("TestProvider", registry)).toBeDefined();
+    expect(getMediaUnderstandingProvider("testprovider", registry)).toBe(
+      getMediaUnderstandingProvider("TESTPROVIDER", registry),
+    );
+  });
+
+  it("normalizes z.ai alias consistently in lookups", () => {
+    const pluginRegistry = createEmptyPluginRegistry();
+    pluginRegistry.mediaUnderstandingProviders.push({
+      pluginId: "zai-plugin",
+      pluginName: "ZAI Plugin",
+      source: "test",
+      provider: {
+        id: "zai",
+        capabilities: ["audio"],
+        transcribeAudio: async () => ({ text: "zai audio" }),
+      },
+    });
+    setActivePluginRegistry(pluginRegistry);
+
+    const registry = buildMediaUnderstandingRegistry();
+
+    expect(getMediaUnderstandingProvider("z.ai", registry)?.id).toBe("zai");
+    expect(getMediaUnderstandingProvider("Z.AI", registry)?.id).toBe("zai");
+    expect(getMediaUnderstandingProvider("z-ai", registry)?.id).toBe("zai");
+  });
+});
+
+describe("capability type guard", () => {
+  afterEach(() => {
+    setActivePluginRegistry(createEmptyPluginRegistry());
+  });
+
+  it("handles providers with undefined routingCapabilities", () => {
+    const pluginRegistry = createEmptyPluginRegistry();
+    pluginRegistry.providers.push({
+      pluginId: "test-plugin",
+      pluginName: "Test Plugin",
+      source: "test",
+      provider: {
+        id: "test-provider",
+        label: "Test Provider",
+        auth: [],
+        routingCapabilities: undefined,
+        transcribeAudio: async () => ({ text: "transcribed" }),
+      },
+    });
+    setActivePluginRegistry(pluginRegistry);
+
+    expect(() => buildMediaUnderstandingRegistry()).not.toThrow();
+  });
+
+  it("handles providers with null routingCapabilities", () => {
+    const pluginRegistry = createEmptyPluginRegistry();
+    pluginRegistry.providers.push({
+      pluginId: "test-plugin",
+      pluginName: "Test Plugin",
+      source: "test",
+      provider: {
+        id: "test-provider",
+        label: "Test Provider",
+        auth: [],
+        routingCapabilities: null,
+        transcribeAudio: async () => ({ text: "transcribed" }),
+      },
+    } as never);
+    setActivePluginRegistry(pluginRegistry);
+
+    expect(() => buildMediaUnderstandingRegistry()).not.toThrow();
+  });
+
+  it("handles providers with object-shaped routingCapabilities", () => {
+    const pluginRegistry = createEmptyPluginRegistry();
+    pluginRegistry.providers.push({
+      pluginId: "test-plugin",
+      pluginName: "Test Plugin",
+      source: "test",
+      provider: {
+        id: "test-provider",
+        label: "Test Provider",
+        auth: [],
+        routingCapabilities: { providerFamily: "openai" },
+        transcribeAudio: async () => ({ text: "transcribed" }),
+      },
+    } as never);
+    setActivePluginRegistry(pluginRegistry);
+
+    expect(() => buildMediaUnderstandingRegistry()).not.toThrow();
+  });
+
+  it("skips providers with non-media capabilities", () => {
+    const pluginRegistry = createEmptyPluginRegistry();
+    pluginRegistry.providers.push({
+      pluginId: "test-plugin",
+      pluginName: "Test Plugin",
+      source: "test",
+      provider: {
+        id: "test-provider",
+        label: "Test Provider",
+        auth: [],
+        routingCapabilities: ["chat", "embedding"],
+        transcribeAudio: async () => ({ text: "transcribed" }),
+      },
+    });
+    setActivePluginRegistry(pluginRegistry);
+
+    const registry = buildMediaUnderstandingRegistry();
+    const provider = getMediaUnderstandingProvider("test-provider", registry);
+
+    expect(provider?.capabilities ?? []).not.toContain("audio");
   });
 });
