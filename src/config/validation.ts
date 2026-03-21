@@ -513,21 +513,28 @@ function validateConfigObjectWithPluginsBase(
     if (knownMemoryProviders.has(provider)) {
       return;
     }
+    const normalizedProvider = normalizeProviderId(provider);
     // Check if this is a loaded plugin embedding provider first
     const pluginRegistry = getActivePluginRegistry();
-    const isKnownPlugin = pluginRegistry?.providers.some((entry) => {
+    const isLoadedPlugin = pluginRegistry?.providers.some((entry) => {
       const caps = entry.provider.routingCapabilities;
       const capabilitiesArray = Array.isArray(caps) ? caps : [];
       return (
-        normalizeProviderId(entry.provider.id) === normalizeProviderId(provider) &&
+        normalizeProviderId(entry.provider.id) === normalizedProvider &&
         capabilitiesArray.includes("embedding")
       );
     });
-    if (isKnownPlugin) {
-      return; // Known plugin embedding provider - validate at runtime
+    if (isLoadedPlugin) {
+      return; // Known loaded plugin with embedding capability - validate at runtime
     }
-    // Note: We don't check manifest registry here because manifest doesn't have
-    // capability info - embeddings will be validated at runtime
+    // Check manifest registry for any plugin that provides this provider ID
+    const manifestRegistry = loadPluginManifestRegistry({ config });
+    const isAvailablePlugin = manifestRegistry.plugins.some((plugin) =>
+      plugin.providers.some((p) => normalizeProviderId(p) === normalizedProvider),
+    );
+    if (isAvailablePlugin) {
+      return; // Available plugin - validate capability at runtime
+    }
     // Reject unknown providers at config time
     issues.push({ path, message: `unknown memorySearch provider: ${provider}` });
   };
@@ -540,21 +547,28 @@ function validateConfigObjectWithPluginsBase(
     if (knownMemoryFallbacks.has(fallback)) {
       return;
     }
+    const normalizedFallback = normalizeProviderId(fallback);
     // Check if this is a loaded plugin embedding provider first
     const pluginRegistry = getActivePluginRegistry();
-    const isKnownPlugin = pluginRegistry?.providers.some((entry) => {
+    const isLoadedPlugin = pluginRegistry?.providers.some((entry) => {
       const caps = entry.provider.routingCapabilities;
       const capabilitiesArray = Array.isArray(caps) ? caps : [];
       return (
-        normalizeProviderId(entry.provider.id) === normalizeProviderId(fallback) &&
+        normalizeProviderId(entry.provider.id) === normalizedFallback &&
         capabilitiesArray.includes("embedding")
       );
     });
-    if (isKnownPlugin) {
-      return; // Known plugin embedding provider - validate at runtime
+    if (isLoadedPlugin) {
+      return; // Known loaded plugin with embedding capability - validate at runtime
     }
-    // Note: We don't check manifest registry here because manifest doesn't have
-    // capability info - embeddings will be validated at runtime
+    // Check manifest registry for any plugin that provides this provider ID
+    const manifestRegistry = loadPluginManifestRegistry({ config });
+    const isAvailablePlugin = manifestRegistry.plugins.some((plugin) =>
+      plugin.providers.some((p) => normalizeProviderId(p) === normalizedFallback),
+    );
+    if (isAvailablePlugin) {
+      return; // Available plugin - validate capability at runtime
+    }
     // Reject unknown fallbacks at config time
     issues.push({ path, message: `unknown memorySearch fallback: ${fallback}` });
   };
