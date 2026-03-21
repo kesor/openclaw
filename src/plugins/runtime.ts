@@ -71,7 +71,6 @@ export function setActivePluginRegistry(registry: PluginRegistry, cacheKey?: str
   }
   state.key = cacheKey ?? null;
   state.version += 1;
-  invalidateAllProviderCaches();
 }
 
 export function requireActivePluginRegistry(): PluginRegistry {
@@ -81,7 +80,6 @@ export function requireActivePluginRegistry(): PluginRegistry {
       state.httpRouteRegistry = state.registry;
     }
     state.version += 1;
-    invalidateAllProviderCaches();
   }
   return state.registry;
 }

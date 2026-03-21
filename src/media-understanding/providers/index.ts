@@ -61,6 +61,12 @@ function isCapabilityArray(cap: unknown): cap is string[] {
   return Array.isArray(cap);
 }
 
+const capabilityMethodMap: Record<MediaUnderstandingCapability, keyof PluginProviderEntry> = {
+  audio: "transcribeAudio",
+  image: "describeImage",
+  video: "describeVideo",
+};
+
 function getPluginMediaProviders(cfg?: OpenClawConfig): Record<string, MediaUnderstandingProvider> {
   // Ensure plugins are loaded before querying for media providers
   loadOpenClawPlugins({ config: cfg });
@@ -72,12 +78,15 @@ function getPluginMediaProviders(cfg?: OpenClawConfig): Record<string, MediaUnde
         return undefined;
       }
       const caps = p.routingCapabilities;
-      const capabilities = (isCapabilityArray(caps) ? caps : [])
+      const rawCapabilities = (isCapabilityArray(caps) ? caps : [])
         .map(mapMediaCapability)
         .filter((c): c is MediaUnderstandingCapability => c !== undefined);
-      const hasMediaCapabilities = capabilities.length > 0;
+      const capabilities = rawCapabilities.filter((cap) => {
+        const methodName = capabilityMethodMap[cap];
+        return methodName in p && p[methodName] !== undefined && p[methodName] !== null;
+      });
 
-      if (!hasMediaCapabilities) {
+      if (capabilities.length === 0) {
         return undefined;
       }
 
@@ -99,6 +108,11 @@ export function buildMediaUnderstandingRegistry(
   overrides?: Record<string, MediaUnderstandingProvider>,
   cfg?: OpenClawConfig,
 ): Map<string, MediaUnderstandingProvider> {
+  const currentVersion = getActivePluginRegistryVersion();
+  if (!overrides && mediaUnderstandingRegistryCache && cachedRegistryVersion === currentVersion) {
+    return mediaUnderstandingRegistryCache;
+  }
+
   const registry = new Map<string, MediaUnderstandingProvider>();
   for (const provider of PROVIDERS) {
     mergeProviderIntoRegistry(registry, provider);
@@ -112,10 +126,6 @@ export function buildMediaUnderstandingRegistry(
     mergeProviderIntoRegistry(registry, entry.provider);
   }
 
-  const currentVersion = getActivePluginRegistryVersion();
-  if (!overrides && mediaUnderstandingRegistryCache && cachedRegistryVersion === currentVersion) {
-    return mediaUnderstandingRegistryCache;
-  }
   cachedRegistryVersion = currentVersion;
 
   const pluginProviders = getPluginMediaProviders(cfg);
