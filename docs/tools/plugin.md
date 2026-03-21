@@ -227,20 +227,22 @@ export default definePluginEntry({
 
 Common registration methods:
 
-| Method                               | What it registers    |
-| ------------------------------------ | -------------------- |
-| `registerProvider`                   | Model provider (LLM) |
-| `registerChannel`                    | Chat channel         |
-| `registerTool`                       | Agent tool           |
-| `registerHook` / `on(...)`           | Lifecycle hooks      |
-| `registerSpeechProvider`             | Text-to-speech / STT |
-| `registerMediaUnderstandingProvider` | Image/audio analysis |
-| `registerImageGenerationProvider`    | Image generation     |
-| `registerWebSearchProvider`          | Web search           |
-| `registerHttpRoute`                  | HTTP endpoint        |
-| `registerCommand` / `registerCli`    | CLI commands         |
-| `registerContextEngine`              | Context engine       |
-| `registerService`                    | Background service   |
+| Method                               | What it registers    | Notes                                  |
+| ------------------------------------ | -------------------- | -------------------------------------- |
+| `registerProvider`                   | Model provider (LLM) | **Preferred** unified API              |
+| `registerChannel`                    | Chat channel         |                                        |
+| `registerTool`                       | Agent tool           |                                        |
+| `registerHook` / `on(...)`           | Lifecycle hooks      |                                        |
+| `registerSpeechProvider`             | Text-to-speech / STT | Legacy; use `registerProvider` instead |
+| `registerMediaUnderstandingProvider` | Image/audio analysis | Legacy; use `registerProvider instead  |
+| `registerImageGenerationProvider`    | Image generation     |                                        |
+| `registerWebSearchProvider`          | Web search           |                                        |
+| `registerHttpRoute`                  | HTTP endpoint        |                                        |
+| `registerCommand` / `registerCli`    | CLI commands         |                                        |
+| `registerContextEngine`              | Context engine       |                                        |
+| `registerService`                    | Background service   |                                        |
+
+See [Model Provider Plugins](/plugins/model-providers) for how to register providers with capabilities for chat, embeddings, TTS, speech, and media understanding.
 
 ## Related
 
@@ -250,42 +252,9 @@ Common registration methods:
 - [Registering Tools](/plugins/building-plugins#registering-agent-tools) — add agent tools in a plugin
 - [Plugin Internals](/plugins/architecture) — capability model and load pipeline
 - [Community Plugins](/plugins/community) — third-party listings
-
-## Plugin API (overview)
-
-Plugins export either:
-
-- A function: `(api) => { ... }`
-- An object: `{ id, name, configSchema, register(api) { ... } }`
-
-`register(api)` is where plugins attach behavior. Common registrations include:
-
-- `registerTool`
-- `registerHook`
-- `on(...)` for typed lifecycle hooks
-- `registerChannel`
-- `registerProvider`
-- `registerSpeechProvider`
-- `registerMediaUnderstandingProvider`
-- `registerWebSearchProvider`
-- `registerHttpRoute`
-- `registerCommand`
-- `registerCli`
-- `registerContextEngine`
-- `registerService`
-
-See [Model Provider Plugins](/plugins/model-providers) for how to register providers with capabilities for chat, embeddings, TTS, speech, and media understanding.
-
-See [Plugin manifest](/plugins/manifest) for the manifest file format.
-
-## Further reading
-
-- [Plugin architecture and internals](/plugins/architecture) -- capability model,
+- [Plugin architecture and internals](/plugins/architecture) — capability model,
   ownership model, contracts, load pipeline, runtime helpers, and developer API
   reference
 - [Building extensions](/plugins/building-extensions)
-- [Plugin bundles](/plugins/bundles)
-- [Plugin manifest](/plugins/manifest)
 - [Plugin agent tools](/plugins/agent-tools)
 - [Capability Cookbook](/tools/capability-cookbook)
-- [Community plugins](/plugins/community)
