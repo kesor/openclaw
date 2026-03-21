@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
+import { findNormalizedProviderValue } from "../agents/provider-id.js";
 import type { ReplyPayload } from "../auto-reply/types.js";
 import { normalizeChannelId } from "../channels/plugins/index.js";
 import type { ChannelId } from "../channels/plugins/types.js";
@@ -552,7 +553,7 @@ export function resolveTtsApiKey(
     return config.openai.apiKey || process.env.OPENAI_API_KEY;
   }
   // Check for custom/plugin provider API key in config
-  const providerConfig = cfg?.models?.providers?.[provider];
+  const providerConfig = findNormalizedProviderValue(cfg?.models?.providers, provider);
   if (providerConfig?.apiKey) {
     if (typeof providerConfig.apiKey === "string") {
       return providerConfig.apiKey;
@@ -569,7 +570,8 @@ function resolveTtsProviderHeaders(
   cfg: OpenClawConfig,
   provider: string,
 ): Record<string, string> | undefined {
-  const headers = cfg.models?.providers?.[provider]?.headers;
+  const providerConfig = findNormalizedProviderValue(cfg.models?.providers, provider);
+  const headers = providerConfig?.headers;
   if (!headers) {
     return undefined;
   }
@@ -597,7 +599,8 @@ function resolveTtsProviderBaseUrl(
   if (configBaseUrl) {
     return configBaseUrl;
   }
-  return cfg.models?.providers?.[provider]?.baseUrl;
+  const providerConfig = findNormalizedProviderValue(cfg.models?.providers, provider);
+  return providerConfig?.baseUrl;
 }
 
 // TTS_PROVIDERS - edge and microsoft are aliases, use edge as canonical
@@ -812,9 +815,10 @@ export async function synthesizeSpeech(params: {
         const ttsConfigDefaults = config[provider as keyof typeof config] as
           | { model?: string; modelId?: string; voice?: string; voiceId?: string }
           | undefined;
-        const modelsProviderDefaults = params.cfg.models?.providers?.[provider] as
-          | { model?: string; modelId?: string; voice?: string; voiceId?: string }
-          | undefined;
+        const modelsProviderDefaults = findNormalizedProviderValue(
+          params.cfg.models?.providers,
+          provider,
+        ) as { model?: string; modelId?: string; voice?: string; voiceId?: string } | undefined;
         const result = await pluginTtsProvider.textToSpeech({
           text: params.text,
           model:
@@ -969,9 +973,10 @@ export async function textToSpeechTelephony(params: {
         const ttsConfigDefaults = config[provider as keyof typeof config] as
           | { model?: string; modelId?: string; voice?: string; voiceId?: string }
           | undefined;
-        const modelsProviderDefaults = params.cfg.models?.providers?.[provider] as
-          | { model?: string; modelId?: string; voice?: string; voiceId?: string }
-          | undefined;
+        const modelsProviderDefaults = findNormalizedProviderValue(
+          params.cfg.models?.providers,
+          provider,
+        ) as { model?: string; modelId?: string; voice?: string; voiceId?: string } | undefined;
         const result = await pluginTtsProvider.textToSpeech({
           text: params.text,
           model: ttsConfigDefaults?.model ?? modelsProviderDefaults?.model,
@@ -1027,9 +1032,10 @@ export async function textToSpeechTelephony(params: {
         const ttsConfigDefaults = config[provider as keyof typeof config] as
           | { model?: string; modelId?: string; voice?: string; voiceId?: string }
           | undefined;
-        const modelsProviderDefaults = params.cfg.models?.providers?.[provider] as
-          | { model?: string; modelId?: string; voice?: string; voiceId?: string }
-          | undefined;
+        const modelsProviderDefaults = findNormalizedProviderValue(
+          params.cfg.models?.providers,
+          provider,
+        ) as { model?: string; modelId?: string; voice?: string; voiceId?: string } | undefined;
         const result = await pluginTtsProvider.textToSpeech({
           text: params.text,
           model: ttsConfigDefaults?.model ?? modelsProviderDefaults?.model,
