@@ -244,6 +244,16 @@ export function normalizeRegisteredProvider(params: {
   // their canonical form (e.g., "qwen" becomes "qwen-portal"). This is intentional—
   // plugin IDs should be normalized for consistent lookups, and plugins should not
   // depend on their original ID being preserved.
+  if (typeof params.provider.id !== "string") {
+    pushProviderDiagnostic({
+      level: "error",
+      pluginId: params.pluginId,
+      source: params.source,
+      message: "provider registration missing id",
+      pushDiagnostic: params.pushDiagnostic,
+    });
+    return null;
+  }
   const id = normalizeProviderId(params.provider.id);
   if (!id) {
     pushProviderDiagnostic({

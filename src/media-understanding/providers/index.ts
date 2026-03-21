@@ -99,12 +99,6 @@ export function buildMediaUnderstandingRegistry(
   overrides?: Record<string, MediaUnderstandingProvider>,
   cfg?: OpenClawConfig,
 ): Map<string, MediaUnderstandingProvider> {
-  const currentVersion = getActivePluginRegistryVersion();
-  if (!overrides && mediaUnderstandingRegistryCache && cachedRegistryVersion === currentVersion) {
-    return mediaUnderstandingRegistryCache;
-  }
-  cachedRegistryVersion = currentVersion;
-
   const registry = new Map<string, MediaUnderstandingProvider>();
   for (const provider of PROVIDERS) {
     mergeProviderIntoRegistry(registry, provider);
@@ -117,6 +111,12 @@ export function buildMediaUnderstandingRegistry(
   for (const entry of pluginRegistry?.mediaUnderstandingProviders ?? []) {
     mergeProviderIntoRegistry(registry, entry.provider);
   }
+
+  const currentVersion = getActivePluginRegistryVersion();
+  if (!overrides && mediaUnderstandingRegistryCache && cachedRegistryVersion === currentVersion) {
+    return mediaUnderstandingRegistryCache;
+  }
+  cachedRegistryVersion = currentVersion;
 
   const pluginProviders = getPluginMediaProviders(cfg);
   for (const [key, provider] of Object.entries(pluginProviders)) {

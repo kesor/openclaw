@@ -1,4 +1,4 @@
-import { normalizeProviderId } from "../agents/model-selection.js";
+import { normalizeSpeechProviderId } from "./provider-registry.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { TextToSpeechRequest, TextToSpeechResult } from "../media-understanding/types.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
@@ -15,6 +15,10 @@ function mapTtsCapability(cap: string): cap is "tts" {
   return cap === "tts";
 }
 
+function normalizeTtsProviderId(id: string): string {
+  return normalizeSpeechProviderId(id) ?? id;
+}
+
 function getPluginTtsProviders(config?: OpenClawConfig): Record<string, TtsProvider> {
   // Ensure plugins are loaded before querying for TTS providers
   loadOpenClawPlugins({ config });
@@ -22,7 +26,7 @@ function getPluginTtsProviders(config?: OpenClawConfig): Record<string, TtsProvi
     if (!p.textToSpeech) {
       return undefined;
     }
-    const normalizedId = normalizeProviderId(p.id);
+    const normalizedId = normalizeSpeechProviderId(p.id);
     return {
       id: normalizedId,
       textToSpeech: p.textToSpeech as TtsProvider["textToSpeech"],
@@ -38,12 +42,12 @@ export function buildTtsProviderRegistry(
 
   const pluginProviders = getPluginTtsProviders(config);
   for (const [key, provider] of Object.entries(pluginProviders)) {
-    registry.set(normalizeProviderId(key), provider);
+    registry.set(normalizeSpeechProviderId(key), provider);
   }
 
   if (overrides) {
     for (const [key, provider] of Object.entries(overrides)) {
-      const normalizedKey = normalizeProviderId(key);
+      const normalizedKey = normalizeSpeechProviderId(key);
       const existing = registry.get(normalizedKey);
       const merged = existing ? { ...existing, ...provider } : provider;
       registry.set(normalizedKey, merged);
@@ -61,5 +65,5 @@ export async function buildTtsProviderRegistryAsync(
 }
 
 export function getTtsProvider(id: string, registry: TtsProviderRegistry): TtsProvider | undefined {
-  return registry.get(normalizeProviderId(id));
+  return registry.get(normalizeSpeechProviderId(id));
 }
