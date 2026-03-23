@@ -42,8 +42,8 @@ export type EmbeddingProvider = {
 };
 
 export type EmbeddingProviderId = "openai" | "local" | "gemini" | "voyage" | "mistral" | "ollama";
-export type EmbeddingProviderRequest = string; // Allows built-in IDs, "auto", or custom plugin provider IDs
-export type EmbeddingProviderFallback = string; // Allows built-in IDs, "none", or custom plugin provider IDs
+export type EmbeddingProviderRequest = EmbeddingProviderId | "auto" | (string & {});
+export type EmbeddingProviderFallback = EmbeddingProviderId | "none" | (string & {});
 
 // Remote providers considered for auto-selection when provider === "auto".
 // Ollama is intentionally excluded here so that "auto" mode does not
@@ -454,9 +454,8 @@ export async function createEmbeddingProvider(
     // Custom plugins will be tried as fallback after built-ins fail
     // Try built-in remote providers first
     for (const pid of REMOTE_EMBEDDING_PROVIDER_IDS) {
-      // Check plugin first - but only return if plugin is actually usable
       const pp = pluginProviders[pid];
-      if (pp) {
+      if (pp && (await resolveApiKeyForProvider({ cfg: options.config, provider: pid }))) {
         return { provider: pp, requestedProvider };
       }
       // Try built-in

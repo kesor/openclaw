@@ -126,8 +126,6 @@ export function buildMediaUnderstandingRegistry(
     mergeProviderIntoRegistry(registry, entry.provider);
   }
 
-  cachedRegistryVersion = currentVersion;
-
   const pluginProviders = getPluginMediaProviders(cfg);
   for (const [key, provider] of Object.entries(pluginProviders)) {
     const normalizedKey = normalizeMediaProviderId(key);
@@ -165,6 +163,7 @@ export function buildMediaUnderstandingRegistry(
   }
 
   if (!overrides) {
+    cachedRegistryVersion = getActivePluginRegistryVersion();
     mediaUnderstandingRegistryCache = registry;
   }
   return registry;

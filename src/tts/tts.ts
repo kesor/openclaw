@@ -38,6 +38,7 @@ import type { SpeechVoiceOption } from "./provider-types.js";
 import {
   buildTtsProviderRegistryAsync as buildPluginTtsRegistry,
   getTtsProvider as getPluginTtsProvider,
+  type TtsProvider as PluginTtsProviderObject,
 } from "./providers.js";
 import {
   DEFAULT_OPENAI_BASE_URL,
@@ -902,6 +903,63 @@ export async function synthesizeSpeech(params: {
   return buildTtsFailureResult(errors);
 }
 
+async function invokePluginTelephonyTts(
+  pluginProvider: PluginTtsProviderObject,
+  provider: string,
+  config: ResolvedTtsConfig,
+  cfg: OpenClawConfig,
+  text: string,
+): Promise<TtsTelephonyResult> {
+  const providerStart = Date.now();
+  const apiKey = resolveTtsApiKey(config, cfg, provider) ?? "";
+  const fetchFn = resolveProxyFetchFromEnv();
+  const headers = resolveTtsProviderHeaders(cfg, provider);
+  const baseUrl = resolveTtsProviderBaseUrl(config, cfg, provider);
+  const ttsConfigDefaults = config[provider as keyof typeof config] as
+    | { model?: string; modelId?: string; voice?: string; voiceId?: string }
+    | undefined;
+  const modelsProviderDefaults = findNormalizedProviderValue(cfg.models?.providers, provider) as
+    | { model?: string; modelId?: string; voice?: string; voiceId?: string }
+    | undefined;
+  const result = await pluginProvider.textToSpeech({
+    text,
+    model: ttsConfigDefaults?.model ?? modelsProviderDefaults?.model,
+    modelId: ttsConfigDefaults?.modelId ?? modelsProviderDefaults?.modelId,
+    voice: ttsConfigDefaults?.voice ?? modelsProviderDefaults?.voice,
+    voiceId: ttsConfigDefaults?.voiceId ?? modelsProviderDefaults?.voiceId,
+    apiKey,
+    baseUrl,
+    headers,
+    fetchFn,
+    timeoutMs: config.timeoutMs,
+    telephony: true,
+  });
+
+  if (!result.sampleRate) {
+    throw new Error("plugin TTS result missing required sampleRate for telephony");
+  }
+
+  const isPcm =
+    result.mime.startsWith("audio/l16") ||
+    result.mime === "audio/raw" ||
+    result.mime === "audio/pcm";
+  if (!isPcm) {
+    throw new Error(`plugin TTS result must be PCM format for telephony, got ${result.mime}`);
+  }
+
+  const mimeExt = result.mime.split("/")[1]?.split(";")[0].trim() || "pcm";
+
+  return {
+    success: true,
+    audioBuffer: result.audio,
+    fileExtension: `.${mimeExt}`,
+    outputFormat: result.mime,
+    sampleRate: result.sampleRate,
+    latencyMs: Date.now() - providerStart,
+    provider,
+  };
+}
+
 export async function textToSpeechTelephony(params: {
   text: string;
   cfg: OpenClawConfig;
@@ -961,121 +1019,33 @@ export async function textToSpeechTelephony(params: {
     const pluginTtsProvider = getPluginTtsProvider(provider, pluginTtsRegistry);
     const isBuiltin = builtinSetTelephony.has(provider.toLowerCase());
 
-    // Try plugin first for built-in providers if plugin exists
-    if (pluginTtsProvider && isBuiltin) {
-      const providerStart = Date.now();
+    if (pluginTtsProvider) {
       try {
-        const apiKey = resolveTtsApiKey(config, params.cfg, provider) ?? "";
-        const fetchFn = resolveProxyFetchFromEnv();
-        const headers = resolveTtsProviderHeaders(params.cfg, provider);
-        const baseUrl = resolveTtsProviderBaseUrl(config, params.cfg, provider);
-        // Check ResolvedTtsConfig first, then fall back to models.providers
-        const ttsConfigDefaults = config[provider as keyof typeof config] as
-          | { model?: string; modelId?: string; voice?: string; voiceId?: string }
-          | undefined;
-        const modelsProviderDefaults = findNormalizedProviderValue(
-          params.cfg.models?.providers,
-          provider,
-        ) as { model?: string; modelId?: string; voice?: string; voiceId?: string } | undefined;
-        const result = await pluginTtsProvider.textToSpeech({
-          text: params.text,
-          model: ttsConfigDefaults?.model ?? modelsProviderDefaults?.model,
-          modelId: ttsConfigDefaults?.modelId ?? modelsProviderDefaults?.modelId,
-          voice: ttsConfigDefaults?.voice ?? modelsProviderDefaults?.voice,
-          voiceId: ttsConfigDefaults?.voiceId ?? modelsProviderDefaults?.voiceId,
-          apiKey,
-          baseUrl,
-          headers,
-          fetchFn,
-          timeoutMs: config.timeoutMs,
-          telephony: true,
-        });
-
-        if (!result.sampleRate) {
-          throw new Error("plugin TTS result missing required sampleRate for telephony");
+        if (isBuiltin) {
+          const result = await invokePluginTelephonyTts(
+            pluginTtsProvider,
+            provider,
+            config,
+            params.cfg,
+            params.text,
+          );
+          return result;
+        } else {
+          const result = await invokePluginTelephonyTts(
+            pluginTtsProvider,
+            provider,
+            config,
+            params.cfg,
+            params.text,
+          );
+          return result;
         }
-
-        // Telephony pipeline expects PCM format (audio/l16 or audio/raw or audio/pcm)
-        // Only accept audio/pcm without parameters - telephony expects 16-bit signed LE PCM
-        const isPcm =
-          result.mime.startsWith("audio/l16") ||
-          result.mime === "audio/raw" ||
-          result.mime === "audio/pcm";
-        if (!isPcm) {
-          throw new Error(`plugin TTS result must be PCM format for telephony, got ${result.mime}`);
-        }
-
-        const mimeExt = result.mime.split("/")[1]?.split(";")[0].trim() || "pcm";
-
-        return {
-          success: true,
-          audioBuffer: result.audio,
-          fileExtension: `.${mimeExt}`,
-          outputFormat: result.mime,
-          sampleRate: result.sampleRate,
-          latencyMs: Date.now() - providerStart,
-          provider,
-        };
       } catch (err) {
-        // Plugin failed - fall through to try built-in for same provider
-        errors.push(formatTtsProviderError(`${provider} (plugin)`, err));
-      }
-    } else if (pluginTtsProvider && !isBuiltin) {
-      // Custom plugin (not a built-in) - try it, no fallback to built-in
-      const providerStart = Date.now();
-      try {
-        const apiKey = resolveTtsApiKey(config, params.cfg, provider) ?? "";
-        const fetchFn = resolveProxyFetchFromEnv();
-        const headers = resolveTtsProviderHeaders(params.cfg, provider);
-        const baseUrl = resolveTtsProviderBaseUrl(config, params.cfg, provider);
-        // Check ResolvedTtsConfig first, then fall back to models.providers
-        const ttsConfigDefaults = config[provider as keyof typeof config] as
-          | { model?: string; modelId?: string; voice?: string; voiceId?: string }
-          | undefined;
-        const modelsProviderDefaults = findNormalizedProviderValue(
-          params.cfg.models?.providers,
-          provider,
-        ) as { model?: string; modelId?: string; voice?: string; voiceId?: string } | undefined;
-        const result = await pluginTtsProvider.textToSpeech({
-          text: params.text,
-          model: ttsConfigDefaults?.model ?? modelsProviderDefaults?.model,
-          modelId: ttsConfigDefaults?.modelId ?? modelsProviderDefaults?.modelId,
-          voice: ttsConfigDefaults?.voice ?? modelsProviderDefaults?.voice,
-          voiceId: ttsConfigDefaults?.voiceId ?? modelsProviderDefaults?.voiceId,
-          apiKey,
-          baseUrl,
-          headers,
-          fetchFn,
-          timeoutMs: config.timeoutMs,
-          telephony: true,
-        });
-
-        if (!result.sampleRate) {
-          throw new Error("plugin TTS result missing required sampleRate for telephony");
+        const errorPrefix = isBuiltin ? `${provider} (plugin)` : provider;
+        errors.push(formatTtsProviderError(errorPrefix, err));
+        if (!isBuiltin) {
+          continue;
         }
-
-        const isPcm =
-          result.mime.startsWith("audio/l16") ||
-          result.mime === "audio/raw" ||
-          result.mime === "audio/pcm";
-        if (!isPcm) {
-          throw new Error(`plugin TTS result must be PCM format for telephony, got ${result.mime}`);
-        }
-
-        const mimeExt = result.mime.split("/")[1]?.split(";")[0].trim() || "pcm";
-
-        return {
-          success: true,
-          audioBuffer: result.audio,
-          fileExtension: `.${mimeExt}`,
-          outputFormat: result.mime,
-          sampleRate: result.sampleRate,
-          latencyMs: Date.now() - providerStart,
-          provider,
-        };
-      } catch (err) {
-        errors.push(formatTtsProviderError(provider, err));
-        continue;
       }
     }
 
